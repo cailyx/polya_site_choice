@@ -12,25 +12,25 @@
 
 <h3 style="font-weight: normal;">*Davis & Shi, 2014. The polyadenylation code: a unified model for the regulation of mRNA alternative poly adenylation.</h3>
 
-<h6 style="font-weight: normal;">A polyA signal (PAS) is an RNA sequence that recruits protein machinery (the "3' processing complex") to cleave/process a pre-mRNA from a transcribing RNA pol II. In ~70% of eukaryotic genes, multiple PASs are lined up at different locations, giving rise to different possible transcripts (termed "alternative polyadenylation (APA)" events) with potentially different functions. Though many factors may enter into why one PAS is selected over another, a helpful bare-bones framework for explaining PAS selection (let's consider just 2, "PAS1" and "PAS2") is to study it as a function of PAS strengths, 3' processing factor concentrations and affinities, rate of RNA pol II transcription, and distance between PAS1 and PAS2-- the paper above provides the relevant rationale and discussion of experimental work. Briefly, we might say PAS1 will be used if it takes less time to trancsribe and process PAS1 ("Tp1") than to transcribe the nt up to and including PAS2 and process PAS2 ("Tp1 < Tt+Tp2"), and provided there are no factors otherwise blocking PAS1. The purpose of this simulator is to explore this intuitively and help articulate ?s (e.g., to what extent can a super-strong PAS1 override super-high []'s of a protein that biases PAS2?). Of course, the core variables here are all tunable in principle by the cell, on top of which other regulators like RNA-binding proteins may provide further control.</h6>
+<h5 style="font-weight: normal;">A polyA signal (PAS) is an RNA sequence that recruits protein machinery (the "3' processing complex") to cleave/process a pre-mRNA from a transcribing RNA pol II. In ~70% of eukaryotic genes, multiple PASs are lined up at different locations, giving rise to different possible transcripts (termed "alternative polyadenylation (APA)" events) with potentially different functions. Though many factors may enter into why one PAS is selected over another, a helpful bare-bones framework for explaining PAS selection (let's consider just 2, "PAS1" and "PAS2") is to study it as a function of PAS strengths, 3' processing factor concentrations and affinities, rate of RNA pol II transcription, and distance between PAS1 and PAS2-- the paper above provides the relevant rationale and discussion of experimental work. Briefly, we might say PAS1 will be used if it takes less time to trancsribe and process PAS1 (call this time "Tp1") than to transcribe the nt between PAS1 and PAS2 ("Tt") and transcribe and process PAS2 ("Tp2"), and provided there are no factors otherwise blocking PAS1. Otherwise, PAS2 wins, as the opposite is the case-- Tp1 > Tt+Tp2. The purpose of this simulator is to explore this intuitively and help articulate questions (e.g., to what extent can a super-strong PAS1 override super-high []'s of a protein that biases PAS2?). Of course, the core variables here are all tunable in principle by the cell, on top of which other regulators like RNA-binding proteins may provide further control.</h5>
 
-<h6 style="font-weight: normal;"> This was made  mostly using Claude (05-16-26) with minor improvements by me. <strong>Note the scales and relative "weights" of each factor are somewhat arbitrary</strong>- please let me know if you notice inaccuracies or have ideas for improvements (eg fixing scales, variables to add/remove, etc.) and/or feel free to make updates yourself! 
-<br> TODO: write out/update &amp add sources for the assumptions-- KD CFIm, DtoP; KD FIP1, PtoD; KD CstF64 PtoD -Cailyx</h6>
+<h5 style="font-weight: normal;"> This was made  mostly using Claude (05-16-26) with minor improvements by me. <strong>Note the scales and relative "weights" of each factor are currently pretty arbitrary</strong>-- please feel free to share or implement ideas for improvements (eg fixing scales, variables to add/remove, etc.)! -Cailyx
+<br> TODO: write out/update &amp add sources for the assumptions-- KD CFIm, DtoP; KD FIP1, PtoD; KD CstF64 PtoD</h5>
 
 <style>
 * { box-sizing: border-box; }
 .root { padding: 0.75rem 0; font-family: var(--font-sans); }
 .col-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 0.75rem; }
 .col { min-width: 0; }
-.col-header { font-size: 11px; font-weight: 500; margin: 0 0 0.4rem; }
+.col-header { font-size: 18px; font-weight: 500; margin: 0 0 0.4rem; }
 .pas1-hdr { color: #185FA5; }
 .pas2-hdr { color: #993C1D; }
-.sec-title { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.07em; text-transform: uppercase; margin: 0 0 0.35rem; padding-bottom: 3px; border-bottom: 0.5px solid var(--color-border-tertiary); }
-.subsec { font-size: 9px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin: 0.45rem 0 0.2rem; }
+.sec-title { font-size: 16px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.07em; text-transform: uppercase; margin: 0 0 0.35rem; padding-bottom: 3px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.subsec { font-size: 14px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin: 0.45rem 0 0.2rem; }
 .ctrl { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; }
-.ctrl-label { font-size: 10px; color: var(--color-text-secondary); width: 105px; flex-shrink: 0; line-height: 1.25; }
+.ctrl-label { font-size: 14px; color: var(--color-text-secondary); width: 105px; flex-shrink: 0; line-height: 1.25; }
 .ctrl input[type=range] { flex: 1; min-width: 0; }
-.ctrl-val { font-size: 10px; font-weight: 500; color: var(--color-text-primary); min-width: 36px; text-align: right; flex-shrink: 0; }
+.ctrl-val { font-size: 12px; font-weight: 500; color: var(--color-text-primary); min-width: 36px; text-align: right; flex-shrink: 0; }
 .chip-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin: 0.5rem 0; }
 .chip { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 5px 7px; font-size: 10px; color: var(--color-text-secondary); text-align: center; }
 .chip b { display: block; font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-top: 1px; }
@@ -78,7 +78,7 @@ select { font-size: 10px; padding: 2px 4px; border-radius: 4px; border: 0.5px so
     <p class="sec-title">Concentrations</p>
     <div class="ctrl"><span class="ctrl-label">CPSF (nM)</span><input type="range" id="ccpsf" min="5" max="300" step="1" value="60"><span class="ctrl-val" id="ccpsf_v">60</span></div>
     <div class="ctrl"><span class="ctrl-label">CstF64 (nM)</span><input type="range" id="ccstf" min="5" max="300" step="1" value="70"><span class="ctrl-val" id="ccstf_v">70</span></div>
-    <div class="ctrl"><span class="ctrl-label">CFIm (nM) (3) - </span><input type="range" id="ccfim" min="5" max="300" step="1" value="50"><span class="ctrl-val" id="ccfim_v">50</span></div>
+    <div class="ctrl"><span class="ctrl-label">CFIm<sup>1</sup> (nM) - </span><input type="range" id="ccfim" min="5" max="300" step="1" value="50"><span class="ctrl-val" id="ccfim_v">50</span></div>
     <p class="sec-title" style="margin-top:0.5rem;">Kd (factor affinity)</p>
     <div class="ctrl"><span class="ctrl-label">CPSF Kd (nM)</span><input type="range" id="kcp" min="5" max="500" step="1" value="90"><span class="ctrl-val" id="kcp_v">90</span></div>
     <div class="ctrl"><span class="ctrl-label">CstF Kd (nM)</span><input type="range" id="kct" min="5" max="500" step="1" value="130"><span class="ctrl-val" id="kct_v">130</span></div>
@@ -106,6 +106,8 @@ select { font-size: 10px; padding: 2px 4px; border-radius: 4px; border: 0.5px so
 
 <p class="model-note">PAS2 marker shifts right as distance increases — the x-axis maps linearly from 0 nt (left) to max distance (right). Factor Kds are global; PAS-specific differences come from sequence quality scores alone. Efficiency = signal_score × occ(factor). Tp ∝ 1/efficiency. PAS1 wins if Tp1 &lt; Tt+Tp2 (Davis &amp; Shi 2014).</p>
 </div>
+
+<p><sup>1</sup>Observe that if we don't have a UGUA in PAS1 (ie, turn the UGUA knob for PAS1 to zero), and do have one for PAS2, turning [CFIm] to zero (mimicking knock-down) leads to a distal-to-proximal shift, as characterized in Zhu et al., 2018, Molecular Mechanisms for CFIm-Mediated Regulation of mRNA Alternative Polyadenylation, Mol Cell.</p>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -271,6 +273,8 @@ function compute() {
   const eff1=s1h*occ(cpsf1,kcp) * s1d*occ(cstf1,kct) * s1f*occ(cfim,kcf) * ab;
   const eff2=s2h*occ(cpsf,kcp)  * s2d*occ(cstf2,kct) * s2f*occ(cfim,kcf);
 
+
+
   const REF=0.25;
   const Tp1=REF/Math.max(eff1,0.001);
   const Tp2=REF/Math.max(eff2,0.001);
@@ -287,10 +291,10 @@ function compute() {
   const sum=(Tt+Tp2).toFixed(1);
   if(margin>0){
     vb.style.background='#E1F5EE';
-    vb.innerHTML=`<span style="font-size:10px;font-weight:500;color:#0F6E56;text-transform:uppercase;letter-spacing:.05em;">PAS1 wins</span><div class="verdict-eq" style="color:#085041;">Tp1 (${Tp1.toFixed(1)}s) &lt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
+    vb.innerHTML=`<span style="font-size:16px;font-weight:500;color:#0F6E56;text-transform:uppercase;letter-spacing:.05em;">PAS1 wins</span><div class="verdict-eq" style="color:#085041;">Tp1 (${Tp1.toFixed(1)}s) &lt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
   } else {
     vb.style.background='#FAECE7';
-    vb.innerHTML=`<span style="font-size:10px;font-weight:500;color:#993C1D;text-transform:uppercase;letter-spacing:.05em;">PAS2 wins</span><div class="verdict-eq" style="color:#712B13;">Tp1 (${Tp1.toFixed(1)}s) &gt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
+    vb.innerHTML=`<span style="font-size:16px;font-weight:500;color:#993C1D;text-transform:uppercase;letter-spacing:.05em;">PAS2 wins</span><div class="verdict-eq" style="color:#712B13;">Tp1 (${Tp1.toFixed(1)}s) &gt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
   }
 
   buildOrUpdate(p1, p2, dist);
