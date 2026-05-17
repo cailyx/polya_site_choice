@@ -1,0 +1,310 @@
+<head>
+    <style>
+        body {
+            font-family: "Palatino Linotype", "Palatino", "URW Palladio L", "Georgia", serif;
+            color: #222222; /* Optional: Softens the text color slightly for better reading */
+            line-height: 1.6; /* Optional: Adds breathing room between lines of text */
+        }
+    </style>
+</head>
+
+<h2 class="sr-only">Alternative polyA signal (PAS) choice simulator, based on Davis & Shi 2014*.</h2>
+
+<h3 style="font-weight: normal;">*Davis & Shi, 2014. The polyadenylation code: a unified model for the regulation of mRNA alternative poly adenylation.</h3>
+
+<h6 style="font-weight: normal;">A polyA signal (PAS) is an RNA sequence that recruits protein machinery (the "3' processing complex") to cleave/process a pre-mRNA from a transcribing RNA pol II. In ~70% of eukaryotic genes, multiple PASs are lined up at different locations, giving rise to different possible transcripts (termed "alternative polyadenylation (APA)" events) with potentially different functions. Though many factors may enter into why one PAS is selected over another, a helpful bare-bones framework for explaining PAS selection (let's consider just 2, "PAS1" and "PAS2") is to study it as a function of PAS strengths, 3' processing factor concentrations and affinities, rate of RNA pol II transcription, and distance between PAS1 and PAS2-- the paper above provides the relevant rationale and discussion of experimental work. Briefly, we might say PAS1 will be used if it takes less time to trancsribe and process PAS1 ("Tp1") than to transcribe the nt up to and including PAS2 and process PAS2 ("Tp1 < Tt+Tp2"), and provided there are no factors otherwise blocking PAS1. The purpose of this simulator is to explore this intuitively and help articulate ?s (e.g., to what extent can a super-strong PAS1 override super-high []'s of a protein that biases PAS2?). Of course, the core variables here are all tunable in principle by the cell, on top of which other regulators like RNA-binding proteins may provide further control.</h6>
+
+<h6 style="font-weight: normal;"> This was made  mostly using Claude (05-16-26) with minor improvements by me. <strong>Note the scales and relative "weights" of each factor are somewhat arbitrary</strong>- please let me know if you notice inaccuracies or have ideas for improvements (eg fixing scales, variables to add/remove, etc.) and/or feel free to make updates yourself! 
+<br> TODO: write out/update &amp add sources for the assumptions-- KD CFIm, DtoP; KD FIP1, PtoD; KD CstF64 PtoD -Cailyx</h6>
+
+<style>
+* { box-sizing: border-box; }
+.root { padding: 0.75rem 0; font-family: var(--font-sans); }
+.col-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 0.75rem; }
+.col { min-width: 0; }
+.col-header { font-size: 11px; font-weight: 500; margin: 0 0 0.4rem; }
+.pas1-hdr { color: #185FA5; }
+.pas2-hdr { color: #993C1D; }
+.sec-title { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.07em; text-transform: uppercase; margin: 0 0 0.35rem; padding-bottom: 3px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.subsec { font-size: 9px; font-weight: 500; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin: 0.45rem 0 0.2rem; }
+.ctrl { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; }
+.ctrl-label { font-size: 10px; color: var(--color-text-secondary); width: 105px; flex-shrink: 0; line-height: 1.25; }
+.ctrl input[type=range] { flex: 1; min-width: 0; }
+.ctrl-val { font-size: 10px; font-weight: 500; color: var(--color-text-primary); min-width: 36px; text-align: right; flex-shrink: 0; }
+.chip-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin: 0.5rem 0; }
+.chip { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 5px 7px; font-size: 10px; color: var(--color-text-secondary); text-align: center; }
+.chip b { display: block; font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin-top: 1px; }
+.verdict-box { border-radius: var(--border-radius-md); padding: 7px 10px; font-size: 11px; margin-bottom: 0.5rem; }
+.verdict-eq { font-size: 11px; font-weight: 500; font-family: var(--font-mono); margin-top: 2px; }
+.reg-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px 10px; margin-top: 4px; }
+.model-note { font-size: 10px; color: var(--color-text-tertiary); line-height: 1.5; border-top: 0.5px solid var(--color-border-tertiary); padding-top: 6px; margin-top: 0.6rem; }
+select { font-size: 10px; padding: 2px 4px; border-radius: 4px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); }
+</style>
+
+<div class="root">
+
+<div style="position:relative;width:100%;height:200px;">
+  <canvas id="passeq" role="img" aria-label="PAS-seq peak track. PAS2 position shifts right as inter-PAS distance increases. Blue = PAS1, coral = PAS2.">PAS-seq peaks at PAS1 and PAS2.</canvas>
+</div>
+
+<div id="verdict" class="verdict-box"></div>
+
+<div class="chip-row">
+  <div class="chip">Tt (transit)<b id="chip_tt">—</b></div>
+  <div class="chip">Tp1<b id="chip_tp1">—</b></div>
+  <div class="chip">Tp2<b id="chip_tp2">—</b></div>
+</div>
+
+<div class="col-grid">
+
+  <div class="col">
+    <p class="col-header pas1-hdr">PAS 1 — proximal</p>
+    <p class="sec-title">Signal sequence quality</p>
+    <div class="ctrl"><span class="ctrl-label">AAUAAA hexamer</span><input type="range" id="s1h" min="0.05" max="1" step="0.01" value="0.4"><span class="ctrl-val" id="s1h_v">0.40</span></div>
+    <div class="ctrl"><span class="ctrl-label">U/GU DSE</span><input type="range" id="s1d" min="0.05" max="1" step="0.01" value="0.4"><span class="ctrl-val" id="s1d_v">0.40</span></div>
+    <div class="ctrl"><span class="ctrl-label">UGUA/USE (CFIm)</span><input type="range" id="s1f" min="0.05" max="1" step="0.01" value="0.4"><span class="ctrl-val" id="s1f_v">0.40</span></div>
+  </div>
+
+  <div class="col">
+    <p class="col-header pas2-hdr">PAS 2 — distal</p>
+    <p class="sec-title">Signal sequence quality</p>
+    <div class="ctrl"><span class="ctrl-label">AAUAAA hexamer</span><input type="range" id="s2h" min="0.05" max="1" step="0.01" value="0.75"><span class="ctrl-val" id="s2h_v">0.75</span></div>
+    <div class="ctrl"><span class="ctrl-label">U/GU DSE</span><input type="range" id="s2d" min="0.05" max="1" step="0.01" value="0.7"><span class="ctrl-val" id="s2d_v">0.70</span></div>
+    <div class="ctrl"><span class="ctrl-label">UGUA/USE (CFIm)</span><input type="range" id="s2f" min="0.05" max="1" step="0.01" value="0.65"><span class="ctrl-val" id="s2f_v">0.65</span></div>
+  </div>
+
+  <div class="col">
+    <p class="col-header">Factors &amp; transcription</p>
+    <p class="sec-title">Concentrations</p>
+    <div class="ctrl"><span class="ctrl-label">CPSF (nM)</span><input type="range" id="ccpsf" min="5" max="300" step="1" value="60"><span class="ctrl-val" id="ccpsf_v">60</span></div>
+    <div class="ctrl"><span class="ctrl-label">CstF64 (nM)</span><input type="range" id="ccstf" min="5" max="300" step="1" value="70"><span class="ctrl-val" id="ccstf_v">70</span></div>
+    <div class="ctrl"><span class="ctrl-label">CFIm (nM) (3) - </span><input type="range" id="ccfim" min="5" max="300" step="1" value="50"><span class="ctrl-val" id="ccfim_v">50</span></div>
+    <p class="sec-title" style="margin-top:0.5rem;">Kd (factor affinity)</p>
+    <div class="ctrl"><span class="ctrl-label">CPSF Kd (nM)</span><input type="range" id="kcp" min="5" max="500" step="1" value="90"><span class="ctrl-val" id="kcp_v">90</span></div>
+    <div class="ctrl"><span class="ctrl-label">CstF Kd (nM)</span><input type="range" id="kct" min="5" max="500" step="1" value="130"><span class="ctrl-val" id="kct_v">130</span></div>
+    <div class="ctrl"><span class="ctrl-label">CFIm Kd (nM)</span><input type="range" id="kcf" min="5" max="500" step="1" value="150"><span class="ctrl-val" id="kcf_v">150</span></div>
+    <p class="sec-title" style="margin-top:0.5rem;">Pol II</p>
+    <div class="ctrl"><span class="ctrl-label">Elongation (nt/s)</span><input type="range" id="rate" min="5" max="100" step="1" value="30"><span class="ctrl-val" id="rate_v">30</span></div>
+    <div class="ctrl"><span class="ctrl-label">PAS1→PAS2 (nt)</span><input type="range" id="dist" min="100" max="6000" step="50" value="1000"><span class="ctrl-val" id="dist_v">1000</span></div>
+  </div>
+
+</div>
+
+<div style="margin-top:0.75rem;">
+  <p class="sec-title">Agonist / antagonist regulators</p>
+  <div class="reg-grid">
+    <div class="ctrl"><span class="ctrl-label">PABPN1 (nM)</span><input type="range" id="pabpn1" min="0" max="200" step="1" value="0"><span class="ctrl-val" id="pabpn1_v">0</span></div>
+    <div class="ctrl"><span class="ctrl-label">hnRNP F/H (nM)</span><input type="range" id="hnrnp" min="0" max="200" step="1" value="0"><span class="ctrl-val" id="hnrnp_v">0</span></div>
+    <div class="ctrl"><span class="ctrl-label">PTB/Sxl (nM)</span><input type="range" id="ptb" min="0" max="200" step="1" value="0"><span class="ctrl-val" id="ptb_v">0</span></div>
+    <div class="ctrl"><span class="ctrl-label">CPEB1/αCP (nM)</span><input type="range" id="activ" min="0" max="200" step="1" value="0"><span class="ctrl-val" id="activ_v">0</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+    <span style="font-size:10px;color:var(--color-text-secondary);">hnRNP/PTB targets:</span>
+    <select id="inh_target"><option value="both">both PAS1 & PAS2</option><option value="pas1">PAS1 only</option><option value="pas2">PAS2 only</option></select>
+  </div>
+</div>
+
+<p class="model-note">PAS2 marker shifts right as distance increases — the x-axis maps linearly from 0 nt (left) to max distance (right). Factor Kds are global; PAS-specific differences come from sequence quality scores alone. Efficiency = signal_score × occ(factor). Tp ∝ 1/efficiency. PAS1 wins if Tp1 &lt; Tt+Tp2 (Davis &amp; Shi 2014).</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script>
+const sliders = ['s1h','s1d','s1f','s2h','s2d','s2f','ccpsf','ccstf','ccfim','kcp','kct','kcf','rate','dist','pabpn1','hnrnp','ptb','activ'];
+
+function occ(c,kd){ return c/(kd+c); }
+function sigmoid(x,s){ return 1/(1+Math.exp(-x/s)); }
+function gauss(x,mu,sig){ return Math.exp(-0.5*((x-mu)/sig)**2); }
+
+const N = 600;
+const DIST_MIN = 100, DIST_MAX = 6000;
+const PAS1_NT = 500;
+const MARGIN_NT = 300;
+
+let chart = null;
+
+function ntToX(nt, totalNt) {
+  return Math.round((nt / totalNt) * (N - 1));
+}
+
+function makeReads(p1, p2, pas1X, pas2X) {
+  const sig = 14;
+  return Array.from({length: N}, (_, x) =>
+    +(p1 * 1000 * gauss(x, pas1X, sig) + p2 * 1000 * gauss(x, pas2X, sig)).toFixed(2)
+  );
+}
+
+function buildOrUpdate(p1, p2, dist) {
+  const totalNt = PAS1_NT + dist + MARGIN_NT;
+  const pas1X = ntToX(PAS1_NT, totalNt);
+  const pas2X = ntToX(PAS1_NT + dist, totalNt);
+  const endX = N - 1;
+
+  const reads = makeReads(p1, p2, pas1X, pas2X);
+
+  const isDark = matchMedia('(prefers-color-scheme:dark)').matches;
+  const textColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const geneBg = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)';
+  const exonBg = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.2)';
+
+  const p1s = (p1*100).toFixed(1)+'%';
+  const p2s = (p2*100).toFixed(1)+'%';
+
+  const intronStart = Math.round(pas1X + 4);
+  const intronEnd = Math.round(pas2X - 4);
+  const ex1End = Math.round(pas1X - 8);
+  const ex2Start = Math.round(pas2X + 8);
+
+  if (chart) {
+    chart.data.datasets[0].data = reads;
+    const ann = chart.options.plugins.annotation.annotations;
+    ann.lp1.xMin = pas1X; ann.lp1.xMax = pas1X;
+    ann.lp1.label.content = `PAS1 · ${p1s}`;
+    ann.lp2.xMin = pas2X; ann.lp2.xMax = pas2X;
+    ann.lp2.label.content = `PAS2 · ${p2s}`;
+    ann.gene.xMax = endX;
+    ann.ex1.xMax = ex1End;
+    ann.intron.xMin = intronStart; ann.intron.xMax = intronEnd;
+    ann.ex2.xMin = ex2Start; ann.ex2.xMax = endX - 5;
+    ann.distArrow.xMin = pas1X; ann.distArrow.xMax = pas2X;
+    chart.update('none');
+    return;
+  }
+
+  chart = new Chart(document.getElementById('passeq'), {
+    type: 'line',
+    data: {
+      labels: Array.from({length: N}, (_, i) => i),
+      datasets: [{
+        data: reads,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.4,
+        segment: {
+          borderColor: ctx => ctx.p0.parsed.x < (pas1X + pas2X) / 2 ? '#378ADD' : '#D85A30',
+          backgroundColor: ctx => ctx.p0.parsed.x < (pas1X + pas2X) / 2 ? 'rgba(55,138,221,0.18)' : 'rgba(216,90,48,0.18)',
+        }
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 80 },
+      plugins: {
+        legend: { display: false },
+        tooltip: { enabled: false },
+        annotation: {
+          annotations: {
+            lp1: {
+              type: 'line', xMin: pas1X, xMax: pas1X,
+              borderColor: '#185FA5', borderWidth: 1, borderDash: [4,3],
+              label: { display: true, content: `PAS1 · ${p1s}`, position: 'start',
+                backgroundColor: '#E6F1FB', color: '#0C447C', font: { size: 10, weight: '500' }, padding: 3, borderRadius: 3 }
+            },
+            lp2: {
+              type: 'line', xMin: pas2X, xMax: pas2X,
+              borderColor: '#993C1D', borderWidth: 1, borderDash: [4,3],
+              label: { display: true, content: `PAS2 · ${p2s}`, position: 'start',
+                backgroundColor: '#FAECE7', color: '#712B13', font: { size: 10, weight: '500' }, padding: 3, borderRadius: 3 }
+            },
+            gene: {
+              type: 'box', xMin: 0, xMax: endX, yMin: -52, yMax: -38,
+              backgroundColor: geneBg, borderColor: 'transparent',
+              label: { display: true, content: "5′ ——— 3′", color: textColor, font: { size: 9 } }
+            },
+            ex1: {
+              type: 'box', xMin: 3, xMax: ex1End, yMin: -52, yMax: -38,
+              backgroundColor: exonBg, borderColor: 'transparent',
+              label: { display: true, content: 'exon', color: isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)', font: { size: 8 } }
+            },
+            intron: {
+              type: 'box', xMin: intronStart, xMax: intronEnd, yMin: -47, yMax: -43,
+              backgroundColor: isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)', borderColor: 'transparent'
+            },
+            ex2: {
+              type: 'box', xMin: ex2Start, xMax: endX - 5, yMin: -52, yMax: -38,
+              backgroundColor: exonBg, borderColor: 'transparent',
+              label: { display: true, content: 'last exon / 3′UTR', color: isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)', font: { size: 8 } }
+            },
+            distArrow: {
+              type: 'box', xMin: pas1X, xMax: pas2X, yMin: -58, yMax: -54,
+              backgroundColor: isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.15)', borderColor: 'transparent',
+              label: { display: true, content: `← ${Math.round(dist)} nt →`, color: textColor, font: { size: 9 } }
+            }
+          }
+        }
+      },
+      scales: {
+        x: { display: false, min: 0, max: N - 1 },
+        y: {
+          min: -62,
+          grid: { color: gridColor },
+          ticks: { color: textColor, font: { size: 9 }, callback: v => v < 0 ? '' : Math.round(v) },
+          title: { display: true, text: 'reads (AU)', color: textColor, font: { size: 9 } }
+        }
+      },
+      layout: { padding: { top: 8, bottom: 0 } }
+    }
+  });
+}
+
+function compute() {
+  const g = id => parseFloat(document.getElementById(id).value);
+  const target = document.getElementById('inh_target').value;
+
+  const s1h=g('s1h'),s1d=g('s1d'),s1f=g('s1f');
+  const s2h=g('s2h'),s2d=g('s2d'),s2f=g('s2f');
+  const cpsf=g('ccpsf'),cstf=g('ccstf'),cfim=g('ccfim');
+  const kcp=g('kcp'),kct=g('kct'),kcf=g('kcf');
+  const pabpn1=g('pabpn1'),hnrnp=g('hnrnp'),ptb=g('ptb'),activ=g('activ');
+  const rate=g('rate'),dist=g('dist');
+
+  const Tt=dist/rate;
+  const cstf_inh=occ(hnrnp+ptb,80);
+  const cstf1=cstf*(1-(target==='pas2'?0:cstf_inh));
+  const cstf2=cstf*(1-(target==='pas1'?0:cstf_inh));
+  const cpsf1=cpsf*(1-occ(pabpn1,100)*(1-s1h));
+  const ab=1+occ(activ,60)*0.6;
+
+  const eff1=s1h*occ(cpsf1,kcp) * s1d*occ(cstf1,kct) * s1f*occ(cfim,kcf) * ab;
+  const eff2=s2h*occ(cpsf,kcp)  * s2d*occ(cstf2,kct) * s2f*occ(cfim,kcf);
+
+  const REF=0.25;
+  const Tp1=REF/Math.max(eff1,0.001);
+  const Tp2=REF/Math.max(eff2,0.001);
+  const margin=(Tt+Tp2)-Tp1;
+  const p1=sigmoid(margin,Math.max(Tp1,Tp2)*0.5);
+  const p2=1-p1;
+
+  const fmt=v=>v<1?v.toFixed(2)+'s':v.toFixed(1)+'s';
+  document.getElementById('chip_tt').textContent=fmt(Tt);
+  document.getElementById('chip_tp1').textContent=fmt(Tp1);
+  document.getElementById('chip_tp2').textContent=fmt(Tp2);
+
+  const vb=document.getElementById('verdict');
+  const sum=(Tt+Tp2).toFixed(1);
+  if(margin>0){
+    vb.style.background='#E1F5EE';
+    vb.innerHTML=`<span style="font-size:10px;font-weight:500;color:#0F6E56;text-transform:uppercase;letter-spacing:.05em;">PAS1 wins</span><div class="verdict-eq" style="color:#085041;">Tp1 (${Tp1.toFixed(1)}s) &lt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
+  } else {
+    vb.style.background='#FAECE7';
+    vb.innerHTML=`<span style="font-size:10px;font-weight:500;color:#993C1D;text-transform:uppercase;letter-spacing:.05em;">PAS2 wins</span><div class="verdict-eq" style="color:#712B13;">Tp1 (${Tp1.toFixed(1)}s) &gt; Tt+Tp2 (${Tt.toFixed(1)}+${Tp2.toFixed(1)}=${sum}s)</div>`;
+  }
+
+  buildOrUpdate(p1, p2, dist);
+}
+
+sliders.forEach(id => {
+  const el = document.getElementById(id);
+  const out = document.getElementById(id+'_v');
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    out.textContent = (id.startsWith('s') && v < 1) ? v.toFixed(2) : Math.round(v);
+    compute();
+  });
+});
+document.getElementById('inh_target').addEventListener('change', compute);
+compute();
+</script>
